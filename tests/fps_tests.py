@@ -2,8 +2,9 @@ import unittest
 import sys
 from jsonschema import ValidationError
 from publicsuffix2 import PublicSuffixList
+from unittest import mock
 
-sys.path.append('../FPS-Technical-Github-Checks')
+sys.path.append('../first-party-sets')
 from FpsSet import FpsSet
 from FpsCheck import FpsCheck
 
@@ -15,6 +16,7 @@ class TestValidateSchema(unittest.TestCase):
             "sets":
             [
                 {
+                    "contact": "abc@example.com",
                     "associatedSites": ["https://associated1.com"],
                     "serviceSites": ["https://service1.com"],
                     "rationaleBySite": {
@@ -37,6 +39,7 @@ class TestValidateSchema(unittest.TestCase):
             "sets":
             [
                 {
+                    "contact": "abc@example.com",
                     "primary": "https://primary1.com",
                     "associatedSites": ["https://associated1.com"],
                     "serviceSites": ["https://service1.com"],
@@ -56,6 +59,7 @@ class TestValidateSchema(unittest.TestCase):
             "sets":
             [
                 {
+                    "contact": "abc@example.com",
                     "primary": "https://primary.com",
                     "ccTLDs": {
                         "https://primary.com": "https://primary.ca"
@@ -66,6 +70,28 @@ class TestValidateSchema(unittest.TestCase):
         fp = FpsCheck(fps_sites=json_dict,
                       etlds=None, icanns=set(['ca']))
         with self.assertRaises(ValidationError):
+            fp.validate_schema()
+    def test_no_contact(self):
+       json_dict = {
+            "sets":
+            [
+                {
+                    "primary": "https://primary.com",
+                    "associatedSites": ["https://associated1.com"],
+                    "serviceSites": ["https://service1.com"],
+                    "rationaleBySite": {
+                        "https://associated1.com": "example rationale",
+                        "https://service1.com": "example rationale",
+                    },
+                    "ccTLDs": {
+                        "https://associated1.com": ["https://associated1.ca"]
+                    }
+                }
+            ]
+        }
+       fp = FpsCheck(fps_sites=json_dict,
+                      etlds=None, icanns=set(['ca']))
+       with self.assertRaises(ValidationError):
             fp.validate_schema()
 
 class TestLoadSets(unittest.TestCase):
@@ -519,101 +545,6 @@ class TestFindInvalidETLD(unittest.TestCase):
                     " Public suffix list: https://associated1.c2om",
           "The provided service site does not have an eTLD in the" +
                     " Public suffix list: https://service1.c2om"])
-class TestFindInvalidWellKnown(unittest.TestCase):
-    # These tests will only run properly if the glitch.me websites are up. 
-    # If, for some reason, you would like to run these tests and the websites 
-    # are not up, reach out to the code maintainers, or replace the sites
-    # here with ones you maintain.
-    def test_invalid_primary(self):
-        json_dict = {
-            "sets":
-            [
-                {
-                    "primary": "https://azure-fantastic-wallflower.glitch.me",
-                    "associatedSites": 
-                    ["https://polar-luxuriant-robe.glitch.me"]
-                }
-            ]
-        }
-        fp = FpsCheck(fps_sites=json_dict,
-                     etlds=PublicSuffixList(
-                        psl_file = 'effective_tld_names.dat'),
-                     icanns=set())
-        loaded_sets = fp.load_sets()
-        fp.find_invalid_well_known(loaded_sets)
-        expected_sets = {
-            'https://azure-fantastic-wallflower.glitch.me': 
-            FpsSet(ccTLDs=None,
-                    primary="https://azure-fantastic-wallflower.glitch.me", 
-                    associated_sites=
-                    ["https://polar-luxuriant-robe.glitch.me"],
-                    service_sites=None
-                    )
-        }
-        self.assertEqual(loaded_sets, expected_sets)
-        self.assertEqual(fp.error_list, ["The following member(s) of "
-        "associatedSites were not present in both the changelist "
-        + "and .well-known/first-party-sets file: "+
-        "['https://polar-luxuriant-robe.glitch.me', " +
-         "'https://polar-luxuriant-robe2.glitch.me']"])
-    def test_invalid_associate(self):
-        json_dict = {
-            "sets":
-            [
-                {
-                    "primary":"https://amethyst-scratch-sword.glitch.me",
-                    "associatedSites":
-                        ["https://polar-luxuriant-robe.glitch.me"]
-                }
-            ]
-        }
-        fp = FpsCheck(fps_sites=json_dict,
-                     etlds=PublicSuffixList(
-                        psl_file = 'effective_tld_names.dat'),
-                     icanns=set())
-        loaded_sets = fp.load_sets()
-        fp.find_invalid_well_known(loaded_sets)
-        expected_sets = {
-            "https://amethyst-scratch-sword.glitch.me": 
-            FpsSet(ccTLDs=None,
-                    primary="https://amethyst-scratch-sword.glitch.me", 
-                    associated_sites=
-                    ["https://polar-luxuriant-robe.glitch.me"],
-                    service_sites=None
-                    )
-        }
-        self.assertEqual(loaded_sets, expected_sets)
-        self.assertEqual(fp.error_list, ["The listed associated site did not "
-                    + "have https://amethyst-scratch-sword.glitch.me listed " +
-                    "as its primary: "+
-                    "https://polar-luxuriant-robe.glitch.me" ])
-    def test_expected_well_known(self):
-        json_dict = {
-            "sets":
-            [
-                {
-                    "primary": "https://eggplant-invincible-orca.glitch.me",
-                    "associatedSites": ["https://cactus-chill-brush.glitch.me"]
-                }
-            ]
-        }
-        fp = FpsCheck(fps_sites=json_dict,
-                     etlds=PublicSuffixList(
-                        psl_file = 'effective_tld_names.dat'),
-                     icanns=set())
-        loaded_sets = fp.load_sets()
-        fp.find_invalid_well_known(loaded_sets)
-        expected_sets = {
-            "https://eggplant-invincible-orca.glitch.me": 
-            FpsSet(ccTLDs=None,
-                    primary="https://eggplant-invincible-orca.glitch.me", 
-                    associated_sites=
-                    ["https://cactus-chill-brush.glitch.me"],
-                    service_sites=None
-                    )
-        }
-        self.assertEqual(loaded_sets, expected_sets)
-        self.assertEqual(fp.error_list, [])
         
 class TestFindInvalidESLDs(unittest.TestCase):
     def test_invalid_alias_name(self):
@@ -679,6 +610,68 @@ class TestFindInvalidESLDs(unittest.TestCase):
         self.assertEqual(loaded_sets, expected_sets)
         self.assertEqual(fp.error_list, ["The provided country code: gov, "+
             "in: https://primary.gov is not a ICANN registered country code"])
+    def test_invalid_com_in_alias(self):
+        json_dict = {
+            "sets":
+            [
+                {
+                    "primary": "https://primary.edu",
+                    "ccTLDs": {
+                        "https://primary.edu": ["https://primary.com"]
+                    }
+                }
+            ]
+        }
+        fp = FpsCheck(fps_sites=json_dict,
+                     etlds=None,
+                     icanns=set(["ca"]))
+        loaded_sets = fp.load_sets()
+        fp.find_invalid_alias_eSLDs(loaded_sets)
+        expected_sets = {
+            'https://primary.edu': 
+            FpsSet(
+                    primary="https://primary.edu", 
+                    associated_sites=None,
+                    service_sites=None,
+                    ccTLDs={
+                        "https://primary.edu": ["https://primary.com"]
+                    }
+                    )
+        }
+        self.assertEqual(loaded_sets, expected_sets)
+        self.assertEqual(fp.error_list, ["The provided country code: com, "+
+            "in: https://primary.com is not a ICANN registered country code"])
+    def test_valid_com_in_alias(self):
+        json_dict = {
+            "sets":
+            [
+                {
+                    "primary": "https://primary.ca",
+                    "ccTLDs": {
+                        "https://primary.ca": ["https://primary.com"]
+                    }
+                }
+            ]
+        }
+        fp = FpsCheck(fps_sites=json_dict,
+                     etlds=None,
+                     icanns=set(["ca"]))
+        loaded_sets = fp.load_sets()
+        fp.find_invalid_alias_eSLDs(loaded_sets)
+        expected_sets = {
+            'https://primary.ca': 
+            FpsSet(
+                    primary="https://primary.ca", 
+                    associated_sites=None,
+                    service_sites=None,
+                    ccTLDs={
+                        "https://primary.ca": ["https://primary.com"]
+                    }
+                    )
+        }
+        self.assertEqual(loaded_sets, expected_sets)
+        self.assertEqual(fp.error_list, [])
+    
     def test_expected_esld(self):
         json_dict = {
             "sets":
@@ -710,14 +703,90 @@ class TestFindInvalidESLDs(unittest.TestCase):
         self.assertEqual(loaded_sets, expected_sets)
         self.assertEqual(fp.error_list, [])
 
-class TestFindRobotsTxt(unittest.TestCase):
-    def test_invalid_robots(self):
+# This method will be used in tests below to mock get requests
+def mock_get(*args, **kwargs):
+    class MockedGetResponse:
+        def __init__(self, headers, status_code):
+            self.headers = headers
+            self.status_code = status_code
+            self.url = args[0]
+
+    if args[0] == 'https://service1.com':
+        return MockedGetResponse({}, 200)
+    elif args[0] == 'https://service2.com':
+        return MockedGetResponse({"X-Robots-Tag":"foo"}, 200)
+    elif args[0] == 'https://service3.com':
+        return MockedGetResponse({"X-Robots-Tag":"noindex"}, 200)
+    elif args[0] == 'https://service4.com/robots.txt':
+        return MockedGetResponse({}, 400)
+    elif args[0] == 'https://service5.com/ads.txt':
+        return MockedGetResponse({}, 400)
+    elif args[0] == 'https://service6.com':
+        mgr = MockedGetResponse({}, 200)
+        mgr.url = 'https://example.com'
+        return mgr
+    elif args[0].startswith('https://service'):
+        return MockedGetResponse({},200)
+    
+    return MockedGetResponse(None, 404)
+
+def mock_open_and_load_json(*args, **kwargs):
+    class MockedJsonResponse:
+        def __init__(self, json):
+            self.json = json
+    
+    if args[0] == 'https://primary1.com/.well-known/first-party-set.json':
+        return {
+            "primary": "https://primary1.com",
+            "associatedSites": ["https://not-in-list.com"]
+        }
+    elif args[0] == 'https://expected-associated.com/.well-known/first-party-set.json':
+        return {
+            "primary": "https://primary1.com"
+        }
+    elif args[0] == 'https://primary2.com/.well-known/first-party-set.json':
+        return {
+            "primary": "https://wrong-primary.com",
+            "associatedSites":["https://associated1.com"]
+        }
+    elif args[0] == 'https://associated1.com/.well-known/first-party-set.json':
+        return {
+            "primary": "https://primary2.com"
+        }
+    elif args[0] == 'https://primary3.com/.well-known/first-party-set.json':
+        return {
+            "primary": "https://primary3.com",
+            "associatedSites": ["https://associated2.com"]
+        }
+    elif args[0] == 'https://associated2.com/.well-known/first-party-set.json':
+        return {
+            "primary": "https://wrong-primary.com"
+        }
+    elif args[0] == 'https://primary4.com/.well-known/first-party-set.json':
+        return {
+            "primary": "https://primary4.com",
+            "associatedSites": ["https://associated3.com"]
+        }
+    elif args[0] == 'https://associated3.com/.well-known/first-party-set.json':
+        return {
+            "primary": "https://primary4.com"
+        }
+    return {"primary":None}
+
+# Our test case class
+class MockTestsClass(unittest.TestCase):
+
+    # We patch requests.get with our mocked method. We'll pass
+    # in the relevant urls, and get our responses for robots checks
+    @mock.patch('requests.get', side_effect=mock_get)
+    def test_robots(self, mock_get):
+        # Assert requests.get calls
         json_dict = {
             "sets":
             [
                 {
                     "primary": "https://primary.com",
-                    "serviceSites": ["https://polar-luxuriant-robe.glitch.me"]
+                    "serviceSites": ["https://service1.com"]
                 }
             ]
         }
@@ -731,23 +800,111 @@ class TestFindRobotsTxt(unittest.TestCase):
             FpsSet(
                     primary="https://primary.com", 
                     associated_sites=None,
-                    service_sites=["https://polar-luxuriant-robe.glitch.me"],
+                    service_sites=["https://service1.com"],
                     ccTLDs=None
                     )
         }
         self.assertEqual(loaded_sets, expected_sets)
         self.assertEqual(fp.error_list, ["The service site " +
-        "https://polar-luxuriant-robe.glitch.me has a robots.txt file, but " +
+        "https://service1.com has a robots.txt file, but " +
         "does not have X-Robots-Tag in its header"])
-
-class TestFindAdsTxt(unittest.TestCase):
-    def test_invalid_robots(self):
+    @mock.patch('requests.get', side_effect=mock_get)
+    def test_robots_wrong_tag(self, mock_get):
+        # Assert requests.get calls
         json_dict = {
             "sets":
             [
                 {
                     "primary": "https://primary.com",
-                    "serviceSites": ["https://polar-luxuriant-robe.glitch.me"]
+                    "serviceSites": ["https://service2.com"]
+                }
+            ]
+        }
+        fp = FpsCheck(fps_sites=json_dict,
+                     etlds=None,
+                     icanns=set())
+        loaded_sets = fp.load_sets()
+        fp.find_robots_txt(loaded_sets)
+        expected_sets = {
+            'https://primary.com': 
+            FpsSet(
+                    primary="https://primary.com", 
+                    associated_sites=None,
+                    service_sites=["https://service2.com"],
+                    ccTLDs=None
+                    )
+        }
+        self.assertEqual(loaded_sets, expected_sets)
+        self.assertEqual(fp.error_list, ["The service site " +
+        "https://service2.com has a robots.txt file, but " +
+        "does not have a no-index tag in its header"])
+    @mock.patch('requests.get', side_effect=mock_get)
+    def test_robots_expected_tag(self, mock_get):
+        # Assert requests.get calls
+        json_dict = {
+            "sets":
+            [
+                {
+                    "primary": "https://primary.com",
+                    "serviceSites": ["https://service3.com"]
+                }
+            ]
+        }
+        fp = FpsCheck(fps_sites=json_dict,
+                     etlds=None,
+                     icanns=set())
+        loaded_sets = fp.load_sets()
+        fp.find_robots_txt(loaded_sets)
+        expected_sets = {
+            'https://primary.com': 
+            FpsSet(
+                    primary="https://primary.com", 
+                    associated_sites=None,
+                    service_sites=["https://service3.com"],
+                    ccTLDs=None
+                    )
+        }
+        self.assertEqual(loaded_sets, expected_sets)
+        self.assertEqual(fp.error_list, [])
+
+    @mock.patch('requests.get', side_effect=mock_get)
+    def test_robots_wrong_tag(self, mock_get):
+        # Assert requests.get calls
+        json_dict = {
+            "sets":
+            [
+                {
+                    "primary": "https://primary.com",
+                    "serviceSites": ["https://service4.com"]
+                }
+            ]
+        }
+        fp = FpsCheck(fps_sites=json_dict,
+                     etlds=None,
+                     icanns=set())
+        loaded_sets = fp.load_sets()
+        fp.find_robots_txt(loaded_sets)
+        expected_sets = {
+            'https://primary.com': 
+            FpsSet(
+                    primary="https://primary.com", 
+                    associated_sites=None,
+                    service_sites=["https://service4.com"],
+                    ccTLDs=None
+                    )
+        }
+        self.assertEqual(loaded_sets, expected_sets)
+        self.assertEqual(fp.error_list, [])
+    # We run a similar set of mock tests for ads.txt
+    @mock.patch('requests.get', side_effect=mock_get)
+    def test_ads(self, mock_get):
+        # Assert requests.get calls
+        json_dict = {
+            "sets":
+            [
+                {
+                    "primary": "https://primary.com",
+                    "serviceSites": ["https://service1.com"]
                 }
             ]
         }
@@ -761,23 +918,52 @@ class TestFindAdsTxt(unittest.TestCase):
             FpsSet(
                     primary="https://primary.com", 
                     associated_sites=None,
-                    service_sites=["https://polar-luxuriant-robe.glitch.me"],
+                    service_sites=["https://service1.com"],
                     ccTLDs=None
                     )
         }
         self.assertEqual(loaded_sets, expected_sets)
         self.assertEqual(fp.error_list, ["The service site " +
-        "https://polar-luxuriant-robe.glitch.me has an ads.txt file, " +
-        "this violates the policies for service sites"])
-
-class TestCheckRedirect(unittest.TestCase):
-    def test_invalid_robots(self):
+        "https://service1.com has an ads.txt file, this " +
+        "violates the policies for service sites"])
+    @mock.patch('requests.get', side_effect=mock_get)
+    def test_ads(self, mock_get):
+        # Assert requests.get calls
         json_dict = {
             "sets":
             [
                 {
                     "primary": "https://primary.com",
-                    "serviceSites": ["https://polar-luxuriant-robe.glitch.me"]
+                    "serviceSites": ["https://service5.com"]
+                }
+            ]
+        }
+        fp = FpsCheck(fps_sites=json_dict,
+                     etlds=None,
+                     icanns=set())
+        loaded_sets = fp.load_sets()
+        fp.find_ads_txt(loaded_sets)
+        expected_sets = {
+            'https://primary.com': 
+            FpsSet(
+                    primary="https://primary.com", 
+                    associated_sites=None,
+                    service_sites=["https://service5.com"],
+                    ccTLDs=None
+                    )
+        }
+        self.assertEqual(loaded_sets, expected_sets)
+        self.assertEqual(fp.error_list, [])
+    # We run a similar set of mock tests for redirect check
+    @mock.patch('requests.get', side_effect=mock_get)
+    def test_non_redirect(self, mock_get):
+        # Assert requests.get calls
+        json_dict = {
+            "sets":
+            [
+                {
+                    "primary": "https://primary.com",
+                    "serviceSites": ["https://service1.com"]
                 }
             ]
         }
@@ -791,13 +977,193 @@ class TestCheckRedirect(unittest.TestCase):
             FpsSet(
                     primary="https://primary.com", 
                     associated_sites=None,
-                    service_sites=["https://polar-luxuriant-robe.glitch.me"],
+                    service_sites=["https://service1.com"],
                     ccTLDs=None
                     )
         }
         self.assertEqual(loaded_sets, expected_sets)
-        self.assertEqual(fp.error_list, ["The service site must not be an " +
-        "endpoint: https://polar-luxuriant-robe.glitch.me"])
+        self.assertEqual(fp.error_list, ["The service site " +
+        "must not be an endpoint: https://service1.com"])
+    @mock.patch('requests.get', side_effect=mock_get)
+    def test_proper_redirect(self, mock_get):
+        # Assert requests.get calls
+        json_dict = {
+            "sets":
+            [
+                {
+                    "primary": "https://primary.com",
+                    "serviceSites": ["https://service6.com"]
+                }
+            ]
+        }
+        fp = FpsCheck(fps_sites=json_dict,
+                     etlds=None,
+                     icanns=set())
+        loaded_sets = fp.load_sets()
+        fp.check_for_service_redirect(loaded_sets)
+        expected_sets = {
+            'https://primary.com': 
+            FpsSet(
+                    primary="https://primary.com", 
+                    associated_sites=None,
+                    service_sites=["https://service6.com"],
+                    ccTLDs=None
+                    )
+        }
+        self.assertEqual(loaded_sets, expected_sets)
+        self.assertEqual(fp.error_list, [])
+    @mock.patch('requests.get', side_effect=mock_get)
+    def test_404_redirect(self, mock_get):
+        # Assert requests.get calls
+        json_dict = {
+            "sets":
+            [
+                {
+                    "primary": "https://primary.com",
+                    "serviceSites": ["https://no-such-service.com"]
+                }
+            ]
+        }
+        fp = FpsCheck(fps_sites=json_dict,
+                     etlds=None,
+                     icanns=set())
+        loaded_sets = fp.load_sets()
+        fp.check_for_service_redirect(loaded_sets)
+        expected_sets = {
+            'https://primary.com': 
+            FpsSet(
+                    primary="https://primary.com", 
+                    associated_sites=None,
+                    service_sites=["https://no-such-service.com"],
+                    ccTLDs=None
+                    )
+        }
+        self.assertEqual(loaded_sets, expected_sets)
+        self.assertEqual(fp.error_list, [])
+    # Now we test the mocked open_and_load_json to test the well-known checks
+    @mock.patch('FpsCheck.FpsCheck.open_and_load_json', 
+    side_effect=mock_open_and_load_json)
+    def test_primary_page_differs(self, mock_open_and_load_json):
+        json_dict = {
+            "sets":
+            [
+                {
+                    "primary": "https://primary1.com",
+                    "associatedSites": ["https://expected-associated.com"]
+                }
+            ]
+        }
+        fp = FpsCheck(fps_sites=json_dict,
+                     etlds=None,
+                     icanns=set())
+        loaded_sets = fp.load_sets()
+        fp.find_invalid_well_known(loaded_sets)
+        expected_sets = {
+            'https://primary1.com': 
+            FpsSet(
+                    primary="https://primary1.com", 
+                    associated_sites=["https://expected-associated.com"],
+                    service_sites=None,
+                    ccTLDs=None
+                    )
+        }
+        self.assertEqual(loaded_sets, expected_sets)
+        self.assertEqual(fp.error_list, ["The following member(s) of " +
+        "associatedSites were not present in both the changelist and " + 
+        ".well-known/first-party-set.json file: ['https://expected-associated.com'"
+        + ", 'https://not-in-list.com']"])
+    
+    @mock.patch('FpsCheck.FpsCheck.open_and_load_json', 
+    side_effect=mock_open_and_load_json)
+    def test_wrong_primary_name(self, mock_open_and_load_json):
+        json_dict = {
+            "sets":
+            [
+                {
+                    "primary": "https://primary2.com",
+                    "associatedSites": ["https://associated1.com"]
+                }
+            ]
+        }
+        fp = FpsCheck(fps_sites=json_dict,
+                     etlds=None,
+                     icanns=set())
+        loaded_sets = fp.load_sets()
+        fp.find_invalid_well_known(loaded_sets)
+        expected_sets = {
+            'https://primary2.com': 
+            FpsSet(
+                    primary="https://primary2.com", 
+                    associated_sites=["https://associated1.com"],
+                    service_sites=None,
+                    ccTLDs=None
+                    )
+        }
+        self.assertEqual(loaded_sets, expected_sets)
+        self.assertEqual(fp.error_list, ["The following member(s) of " +
+        "primary were not present in both the changelist and " + 
+        ".well-known/first-party-set.json file: ['https://primary2.com'"
+        + ", 'https://wrong-primary.com']"])
+
+    @mock.patch('FpsCheck.FpsCheck.open_and_load_json', 
+    side_effect=mock_open_and_load_json)
+    def test_associate_wrong_page(self, mock_open_and_load_json):
+        json_dict = {
+            "sets":
+            [
+                {
+                    "primary": "https://primary3.com",
+                    "associatedSites": ["https://associated2.com"]
+                }
+            ]
+        }
+        fp = FpsCheck(fps_sites=json_dict,
+                     etlds=None,
+                     icanns=set())
+        loaded_sets = fp.load_sets()
+        fp.find_invalid_well_known(loaded_sets)
+        expected_sets = {
+            'https://primary3.com': 
+            FpsSet(
+                    primary="https://primary3.com", 
+                    associated_sites=["https://associated2.com"],
+                    service_sites=None,
+                    ccTLDs=None
+                    )
+        }
+        self.assertEqual(loaded_sets, expected_sets)
+        self.assertEqual(fp.error_list, ["The listed associated site "
+                + "did not have https://primary3.com listed as its primary: " 
+                + "https://associated2.com"])
+
+    @mock.patch('FpsCheck.FpsCheck.open_and_load_json', 
+    side_effect=mock_open_and_load_json)
+    def test_expected_case(self, mock_open_and_load_json):
+        json_dict = {
+            "sets":
+            [
+                {
+                    "primary": "https://primary4.com",
+                    "associatedSites": ["https://associated3.com"]
+                }
+            ]
+        }
+        fp = FpsCheck(fps_sites=json_dict,
+                     etlds=None,
+                     icanns=set())
+        loaded_sets = fp.load_sets()
+        fp.find_invalid_well_known(loaded_sets)
+        expected_sets = {
+            'https://primary4.com': 
+            FpsSet(
+                    primary="https://primary4.com", 
+                    associated_sites=["https://associated3.com"],
+                    service_sites=None,
+                    ccTLDs=None
+                    )
+        }
+        self.assertEqual(loaded_sets, expected_sets)
+        self.assertEqual(fp.error_list, [])
 
 if __name__ == '__main__':
     unittest.main()

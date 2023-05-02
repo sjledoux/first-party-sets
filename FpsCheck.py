@@ -16,6 +16,7 @@ import requests
 from FpsSet import FpsSet
 from jsonschema import validate
 from urllib.request import urlopen
+from urllib.request import Request
 from publicsuffix2 import PublicSuffixList
 
 
@@ -35,57 +36,9 @@ class FpsCheck:
                 catching other issues. 
   """
 
-    SCHEMA = {
-            "type": "object",
-            "properties": {
-                "sets":  {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "ccTLDs": {
-                                "type": "object",
-                                "additionalProperties": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    }
-                                }
-                            },
-                            "primary": {"type": "string"},
-                            "associatedSites": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                }
-                            },
-                            "serviceSites": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                }
-                            },
-                            "rationaleBySite": {
-                                "type": "object",
-                                "additionalProperties": {
-                                    "type": "string"
-                                }
-                            }
-                        },
-                        "required": ["primary"],
-                        "dependentRequired": {
-                            "associatedSites": ["rationaleBySite"],
-                            "serviceSites": ["rationaleBySite"]
-                        },
-                    },
-                }
-            }
-        }
-
     def __init__(self, fps_sites: json, etlds: PublicSuffixList, icanns: set):
         """Stores the input from canonical_sites, effective_tld_names.dat, and 
         ICANN_domains into the FpsCheck object"""
-
         self.acceptable_fields = set(
             ["ccTLDs", "primary", "associatedSites", "serviceSites"])
         self.fps_sites = fps_sites
@@ -107,7 +60,9 @@ class FpsCheck:
             jsonschema.exceptions.ValidationError if the schema does not match 
             the format stored in SCHEMA 
         """
-        validate(self.fps_sites, schema = self.SCHEMA)
+        with open('SCHEMA.json') as f:
+            SCHEMA = json.loads(f.read())
+        validate(self.fps_sites, schema = SCHEMA)
 
     def load_sets(self):
         """Loads sets from the JSON file into a dictionary of primary->FpsSet
@@ -165,10 +120,10 @@ class FpsCheck:
                     if site not in rationales.keys():
                         self.error_list.append(
                             "There is no provided rationale for " + site)
-            else:
+            if sites!=None and rationales == None:
                 self.error_list.append(
-                    "A rationaleBySite field is required for this set, but " +
-                    "none is provided")
+                    "A rationaleBySite field is required for this set, but"
+                    + " none is provided. ")
 
     def check_exclusivity(self, check_sets):
         """This method checks for exclusivity of each field in a set of FpsSets
@@ -339,6 +294,19 @@ class FpsCheck:
                             "The provided service site does not have an eTLD " 
                             + "in the Public suffix list: " + service_site)
 
+    def open_and_load_json(self, url):
+        """Calls urlopen and returns json from a site
+
+        Calls urlopena and json.load on a domain. Returns the json object.
+        This functionality is separated out here to make testing easier.
+        
+        Args:
+            url: a domain that we want to load the json from
+        """
+        req = Request(url=url, headers={'User-Agent': 'Chrome'})
+        with urlopen(req) as json_file:
+            return json.load(json_file)
+
     def check_list_sites(self, primary, site_list):
         """Checks that sites in a given list have the correct primary on their 
         well-known page
@@ -355,14 +323,13 @@ class FpsCheck:
             None
         """
         for site in site_list:
-            url = site + "/.well-known/first-party-set"
+            url = site + "/.well-known/first-party-set.json"
             try:
-                with urlopen(url) as json_file:
-                    json_schema = json.load(json_file)
+                json_schema = self.open_and_load_json(url)
                 if 'primary' not in json_schema.keys():
                     self.error_list.append(
                         "The listed associated site site did not have primary"
-                        + " as a key in its .well-known/first-party-set file: "
+                        + " as a key in its .well-known/first-party-set.json file: "
                         + site)
                 elif json_schema['primary'] != primary:
                     self.error_list.append("The listed associated site "
@@ -372,8 +339,7 @@ class FpsCheck:
                 self.error_list.append(
                     "Experienced an error when trying to access " + url + "; "
                     + "error was: " + str(inst))
-
-    # For now, the following test is not called
+    
     def find_invalid_well_known(self, check_sets):
         """Checks for and validates well-known pages for FPS sets
 
@@ -392,28 +358,35 @@ class FpsCheck:
         # Check the schema to ensure consistency
         for primary in check_sets:
             # First we check the primary sites
-            url = primary + "/.well-known/first-party-set"
+            url = primary + "/.well-known/first-party-set.json"
             # Read the well-known files and check them against the schema we 
             # have stored
             try:
-                with urlopen(url) as json_file:
-                    json_schema = json.load(json_file)
+                json_schema = self.open_and_load_json(url)
                 schema_fields = set(self.acceptable_fields) & set(
                     json_schema.keys())
                 curr_fps_set = check_sets[primary]
                 for field in schema_fields:
-                    field_sym_difference = set(json_schema[field]) ^ set(
+                    if field == "primary":
+                        if json_schema["primary"] != curr_fps_set.primary:
+                            field_sym_difference = [json_schema["primary"], 
+                            curr_fps_set.primary]
+                        else:
+                            field_sym_difference = []
+                    else:
+                        field_sym_difference = set(json_schema[field]) ^ set(
                         curr_fps_set.relevant_fields_dict[field])
-                    if field == 'ccTLDs':
-                        for aliased_site in json_schema[field]:
-                            field_sym_difference.update(
-                                set(json_schema[field][aliased_site]) ^ set(
-                                curr_fps_set.relevant_fields_dict[field]
-                                [aliased_site]))
+                        if field == 'ccTLDs':
+                            for aliased_site in json_schema[field]:
+                                field_sym_difference.update(
+                                    set(json_schema[field][aliased_site]) ^ 
+                                    set(
+                                    curr_fps_set.relevant_fields_dict[field]
+                                    [aliased_site]))
                     if field_sym_difference:
                         self.error_list.append("The following member(s) of " 
                         + field + " were not present in both the changelist "
-                        + "and .well-known/first-party-sets file: " + 
+                        + "and .well-known/first-party-set.json file: " + 
                         str(sorted(field_sym_difference)))
             except Exception as inst:
                 self.error_list.append(
@@ -466,16 +439,20 @@ class FpsCheck:
                                 "primary, associated site, or service site " +
                                 "within the firsty pary set for " + primary)
                     # check the validity of the aliases
-                    aliased_tld = aliased_site.split(".")[0]
+                    aliased_domain, aliased_tld = aliased_site.split(".", 1)
+                    if aliased_tld in self.icanns:
+                        icann_check = self.icanns.union({"com"})
+                    else:
+                        icann_check = self.icanns
                     plus1s = [(site, site.split(".")[0], site.split(".")[-1])
                               for site in curr_set.ccTLDs[aliased_site]]
                     for eSLD in plus1s:
-                        if eSLD[1] != aliased_tld:
+                        if eSLD[1] != aliased_domain:
                             self.error_list.append(
                                 "The following top level domain must match: " 
                                 + aliased_site + ", but is instead: " 
                                 + eSLD[0])
-                        if eSLD[2] not in self.icanns:
+                        if eSLD[2] not in icann_check:
                             self.error_list.append(
                                 "The provided country code: " + eSLD[2] + 
                                 ", in: " + eSLD[0] + 
@@ -500,6 +477,8 @@ class FpsCheck:
         exception_retries = "Max retries exceeded with url: /robots.txt"
         exception_timeout = "Read timed out. (read timeout=10)"
         for primary in check_sets:
+            if not check_sets[primary].service_sites:
+                continue
             for service_site in check_sets[primary].service_sites:
                 robot_site = service_site + "/robots.txt"
                 try:
@@ -522,7 +501,7 @@ class FpsCheck:
                         if exception_timeout not in str(inst):
                             self.error_list.append(
                                 "Unexpected error for service site: " +
-                                    service_site + "\nReceived error:" + 
+                                    service_site + "; Received error:" + 
                                     str(inst))
 
     def find_ads_txt(self, check_sets):
@@ -542,6 +521,8 @@ class FpsCheck:
         exception_retries = "Max retries exceeded with url: /ads.txt"
         exception_timeout = "Read timed out. (read timeout=10)"
         for primary in check_sets:
+            if not check_sets[primary].service_sites:
+                continue
             for service_site in check_sets[primary].service_sites:
                 ads_site = service_site + "/ads.txt"
                 try:
@@ -575,6 +556,8 @@ class FpsCheck:
         exception_retries = "Max retries exceeded with url: /"
         exception_timeout = "Read timed out. (read timeout=10)"
         for primary in check_sets:
+            if not check_sets[primary].service_sites:
+                continue
             for service_site in check_sets[primary].service_sites:
                 try:
                     r = requests.get(service_site, timeout=10)

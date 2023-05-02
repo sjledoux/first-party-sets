@@ -13,12 +13,20 @@
 # limitations under the License.
 from FpsCheck import FpsCheck
 import json
+import getopt
+import sys
 from publicsuffix2 import PublicSuffixList
 
 
 def main():
+    args = sys.argv[1:]
+    inputFile = 'first_party_sets.JSON'
+    opts, _ = getopt.getopt(args, "i:")
+    for opt, arg in opts:
+        if opt == '-i':
+            inputFile = arg
     # Open the canonical sites, and load the json
-    with open('first_party_sets.JSON') as f:
+    with open(inputFile) as f:
         fps_sites = json.load(f)
 
     # Load the etlds from the public suffix list
