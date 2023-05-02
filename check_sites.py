@@ -21,19 +21,22 @@ from publicsuffix2 import PublicSuffixList
 def main():
     args = sys.argv[1:]
     inputFile = 'first_party_sets.JSON'
+    inputPrefix = ''
     opts, _ = getopt.getopt(args, "i:")
     for opt, arg in opts:
         if opt == '-i':
             inputFile = arg
+            inputPrefix='main/'
+
     # Open the canonical sites, and load the json
     with open(inputFile) as f:
         fps_sites = json.load(f)
 
     # Load the etlds from the public suffix list
-    etlds = PublicSuffixList(psl_file = 'effective_tld_names.dat')
+    etlds = PublicSuffixList(psl_file = inputPrefix+'effective_tld_names.dat')
     # Get all the ICANN domains
     icanns = set()
-    with open('ICANN_domains') as f:
+    with open(inputPrefix+'ICANN_domains') as f:
         for line in f:
             l = line.strip()
             icanns.add(l)
