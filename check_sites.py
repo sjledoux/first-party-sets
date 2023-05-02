@@ -30,7 +30,12 @@ def main():
 
     # Open the canonical sites, and load the json
     with open(inputFile) as f:
-        fps_sites = json.load(f)
+        try:
+            fps_sites = json.load(f)
+        except Exception as inst:
+        # If the file cannot be loaded, we will not run any other checks
+            print(inst)
+            exit()      
 
     # Load the etlds from the public suffix list
     etlds = PublicSuffixList(psl_file = inputPrefix+'effective_tld_names.dat')
