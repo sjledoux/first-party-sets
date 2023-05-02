@@ -51,8 +51,9 @@ jobs:
       - name: Write Comment on PR
         uses: mshick/add-pr-comment@v2
         with:   
-          message-path: 
-            "message.txt" 
+          message-path: "message.txt" 
+          allow-repeats: true
+          refresh-message-position: true
       - name: Fail or Succeed
         if: steps.read_results.outputs.contents != 'success'
         uses: actions/github-script@v3
