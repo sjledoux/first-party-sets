@@ -25,7 +25,7 @@ jobs:
           ref: "refs/pull/${{ github.event.number }}/merge"
           path: "pull-request"
       - name: Get the version at main
-        use: actions/checkout@v2
+        uses: actions/checkout@v2
         with:
           path: "main"
       - name: Get necessary libraries
