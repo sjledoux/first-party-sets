@@ -13,7 +13,6 @@
 # limitations under the License.
 name: FPS submission checks
 on: pull_request_target
-  paths: '**.JSON'
 jobs:
   PR-Actions:
     runs-on: ubuntu-latest
