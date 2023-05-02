@@ -45,7 +45,7 @@ def main():
     error_texts = []
 
     try:
-        fps_checker.validate_schema()
+        fps_checker.validate_schema(inputPrefix+'SCHEMA.json')
     except Exception as inst:
         # If the schema is invalid, we will not run any other checks
         print(inst)
