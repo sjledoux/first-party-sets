@@ -60,7 +60,7 @@ class FpsCheck:
             jsonschema.exceptions.ValidationError if the schema does not match 
             the format stored in SCHEMA 
         """
-        with open('schema_file') as f:
+        with open(schema_file) as f:
             SCHEMA = json.loads(f.read())
         validate(self.fps_sites, schema = SCHEMA)
 
