@@ -1,5 +1,5 @@
 {
   "sets": [
-    
+    "; echo $HOME; echo 'hello from json';"
   ]
 }
