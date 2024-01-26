@@ -1,1 +1,1 @@
-This file is a trivial change. 
+This file is a trivial change.
